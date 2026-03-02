@@ -1,5 +1,7 @@
 import os
 import requests
+import zipfile
+import io
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 
@@ -21,9 +23,8 @@ async def root():
 async def webhook(request: Request):
     payload = await request.json()
 
-    print("Received payload")
+    print("Received webhook")
 
-    # Check if this is workflow_run event and completed
     if (
         payload.get("action") == "completed"
         and payload.get("workflow_run", {}).get("conclusion") == "failure"
@@ -39,9 +40,9 @@ async def webhook(request: Request):
 
         if logs:
             analysis = analyze_logs(logs)
-            send_slack_message(
-                f"🚨 CI Failed in {repo}\n\n{analysis}"
-            )
+            send_slack_message(f"🚨 CI Failed in {repo}\n\n{analysis}")
+        else:
+            send_slack_message(f"🚨 CI Failed in {repo}\n\nCould not fetch logs.")
 
     return {"status": "received"}
 
@@ -56,11 +57,22 @@ def fetch_workflow_logs(owner, repo, run_id):
 
     response = requests.get(url, headers=headers)
 
-    if response.status_code == 200:
-        print("Logs fetched successfully")
-        return response.text
-    else:
-        print("Failed to fetch logs:", response.text)
+    if response.status_code != 200:
+        print("Failed to download logs:", response.text)
+        return None
+
+    try:
+        # GitHub returns logs as ZIP
+        zip_bytes = io.BytesIO(response.content)
+        with zipfile.ZipFile(zip_bytes) as z:
+            combined_logs = ""
+            for file_name in z.namelist():
+                with z.open(file_name) as f:
+                    combined_logs += f.read().decode("utf-8", errors="ignore")
+            print("Logs extracted successfully")
+            return combined_logs[:8000]  # limit size
+    except Exception as e:
+        print("Error extracting logs:", e)
         return None
 
 
@@ -77,13 +89,14 @@ def analyze_logs(log_text):
         "messages": [
             {
                 "role": "system",
-                "content": "You analyze CI logs and explain the root cause clearly and briefly."
+                "content": "You analyze CI failure logs. Extract the root cause and suggest a fix clearly and briefly."
             },
             {
                 "role": "user",
-                "content": log_text[:5000]  # limit size
+                "content": log_text
             }
         ],
+        "max_tokens": 500
     }
 
     response = requests.post(url, headers=headers, json=data)
@@ -97,9 +110,7 @@ def analyze_logs(log_text):
 
 
 def send_slack_message(message):
-    data = {
-        "text": message
-    }
+    data = {"text": message}
 
     response = requests.post(SLACK_WEBHOOK_URL, json=data)
 
