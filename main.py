@@ -77,31 +77,20 @@ def fetch_workflow_logs(owner, repo, run_id):
 
 
 def analyze_logs(log_text):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    # Simple failure detection instead of LLM
+    lines = log_text.splitlines()
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ci-failure-agent-ayas.onrender.com",
-        "X-Title": "CI Failure Agent"
-    }
+    error_lines = []
 
-    data = {
-        "model": "mistralai/mistral-7b-instruct",
-        "messages": [
-            {"role": "user", "content": "Say hello"}
-        ],
-    }
+    for line in lines:
+        if "error" in line.lower() or "failed" in line.lower():
+            error_lines.append(line)
 
-    response = requests.post(url, headers=headers, json=data)
+    if not error_lines:
+        return "CI failed but no obvious error message found."
 
-    print("OpenRouter response:", response.text)
-
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"]
-    else:
-        return "OpenRouter error."
-
+    summary = "\n".join(error_lines[:5])  # show first 5 errors
+    return f"Detected error lines:\n\n{summary}"
     
 
 
