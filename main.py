@@ -82,31 +82,27 @@ def analyze_logs(log_text):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ci-failure-agent-ayas.onrender.com",
+        "X-Title": "CI Failure Agent"
     }
 
     data = {
-        "model": "mistralai/mistral-7b-instruct:free",
+        "model": "mistralai/mistral-7b-instruct",
         "messages": [
-            {
-                "role": "system",
-                "content": "You analyze CI failure logs. Extract the root cause and suggest a fix clearly and briefly."
-            },
-            {
-                "role": "user",
-                "content": log_text
-            }
+            {"role": "user", "content": "Say hello"}
         ],
-        "max_tokens": 500
     }
 
     response = requests.post(url, headers=headers, json=data)
 
+    print("OpenRouter response:", response.text)
+
     if response.status_code == 200:
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
+        return response.json()["choices"][0]["message"]["content"]
     else:
-        print("OpenRouter error:", response.text)
-        return "Could not analyze logs."
+        return "OpenRouter error."
+
+    
 
 
 def send_slack_message(message):
