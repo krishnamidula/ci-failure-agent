@@ -72,7 +72,7 @@ def fetch_workflow_logs(owner, repo, run_id):
                 with z.open(file_name) as f:
                     combined_logs += f.read().decode("utf-8", errors="ignore")
             print("Logs extracted successfully")
-            return combined_logs[:-6000]  # limit size
+            return combined_logs[-6000:]  # limit size
     except Exception as e:
         print("Error extracting logs:", e)
         return None
@@ -111,15 +111,26 @@ def analyze_with_llm(log_snippet):
     }
 
     data = {
-        "model": "gpt-oss-120b"
+        "model": "gpt-oss-120b",
         "messages": [
             {
                 "role": "system",
-                "content": "You are a DevOps expert. Identify the root cause of CI failure and suggest a clear fix."
+                "content": "You are a senior CI/CD debugging expert. Only analyze the provided log snippet. Do not give generic advice."
             },
             {
                 "role": "user",
-                "content": "You are a senior CI/CD debugging expert. Only analyze the given log snippet. Do not provide generic advice. Identify the exact failing line and explain the technical cause."
+                "content": f"""
+Analyze this CI failure log and return:
+
+Root Cause:
+<exact technical cause>
+
+Fix:
+<exact fix needed>
+
+Log:
+{log_snippet}
+"""
             }
         ],
         "temperature": 0.2,
