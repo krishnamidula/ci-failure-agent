@@ -10,7 +10,7 @@ load_dotenv()
 app = FastAPI()
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 
@@ -22,11 +22,8 @@ async def root():
 @app.post("/webhook")
 async def webhook(request: Request):
     print("🔥 VERSION 3 - LLM ACTIVE 🔥")
-    print("==== LOG SNIPPET SENT TO LLM ====")
-    print(log_snippet)
-    print("=================================")
-    payload = await request.json()
 
+    payload = await request.json()
     print("Received webhook")
 
     if (
@@ -43,9 +40,14 @@ async def webhook(request: Request):
         logs = fetch_workflow_logs(owner, repo, run_id)
 
         if logs:
-           log_snippet = analyze_logs(logs)
-           analysis = analyze_with_llm(log_snippet)
-           send_slack_message(f"🚨 CI Failed in {repo}\n\n{analysis}")
+            log_snippet = analyze_logs(logs)
+
+            print("==== LOG SNIPPET SENT TO LLM ====")
+            print(log_snippet)
+            print("=================================")
+
+            analysis = analyze_with_llm(log_snippet)
+            send_slack_message(f"🚨 CI Failed in {repo}\n\n{analysis}")
         else:
             send_slack_message(f"🚨 CI Failed in {repo}\n\nCould not fetch logs.")
 
@@ -67,15 +69,18 @@ def fetch_workflow_logs(owner, repo, run_id):
         return None
 
     try:
-        # GitHub returns logs as ZIP
         zip_bytes = io.BytesIO(response.content)
         with zipfile.ZipFile(zip_bytes) as z:
             combined_logs = ""
             for file_name in z.namelist():
                 with z.open(file_name) as f:
                     combined_logs += f.read().decode("utf-8", errors="ignore")
-            print("Logs extracted successfully")
-            return combined_logs[-6000:]  # limit size
+
+        print("Logs extracted successfully")
+
+        # Return last part of logs (most relevant for failure)
+        return combined_logs[-8000:]
+
     except Exception as e:
         print("Error extracting logs:", e)
         return None
@@ -84,7 +89,6 @@ def fetch_workflow_logs(owner, repo, run_id):
 def analyze_logs(log_text):
     lines = log_text.splitlines()
 
-    # Reverse search for real failure indicators
     failure_indicators = [
         "Traceback",
         "AssertionError",
@@ -95,7 +99,7 @@ def analyze_logs(log_text):
         "Exception"
     ]
 
-    # Search from bottom (most recent lines first)
+    # Search from bottom
     for i in range(len(lines) - 1, -1, -1):
         for keyword in failure_indicators:
             if keyword in lines[i]:
@@ -103,13 +107,15 @@ def analyze_logs(log_text):
                 end = min(i + 25, len(lines))
                 return "\n".join(lines[start:end])
 
-    # If nothing found, return last 300 lines
+    # fallback
     return "\n".join(lines[-300:])
+
+
 def analyze_with_llm(log_snippet):
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
-        "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
+        "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json",
     }
 
@@ -155,6 +161,8 @@ Log:
     except Exception as e:
         print("Groq Exception:", str(e))
         return "AI analysis crashed."
+
+
 def send_slack_message(message):
     data = {"text": message}
 
