@@ -81,19 +81,25 @@ def fetch_workflow_logs(owner, repo, run_id):
 def analyze_logs(log_text):
     lines = log_text.splitlines()
 
-    error_blocks = []
+    error_keywords = [
+        "Traceback",
+        "AssertionError",
+        "ModuleNotFoundError",
+        "SyntaxError",
+        "FAILED",
+        "Error:",
+        "Exception"
+    ]
+
     for i, line in enumerate(lines):
-        if "##[error]" in line or "error" in line.lower():
-            # capture 5 lines before and after error
-            start = max(i - 5, 0)
-            end = min(i + 5, len(lines))
-            block = "\n".join(lines[start:end])
-            error_blocks.append(block)
+        for keyword in error_keywords:
+            if keyword in line:
+                start = max(i - 10, 0)
+                end = min(i + 20, len(lines))
+                return "\n".join(lines[start:end])
 
-    if not error_blocks:
-        return "CI failed but no clear error block found."
-
-    return "Potential root cause section:\n\n" + error_blocks[0]
+    # fallback: return last 200 lines
+    return "\n".join(lines[-200:])
 
 def analyze_with_llm(log_snippet):
     url = "https://api.groq.com/openai/v1/chat/completions"
