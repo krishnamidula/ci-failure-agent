@@ -39,8 +39,9 @@ async def webhook(request: Request):
         logs = fetch_workflow_logs(owner, repo, run_id)
 
         if logs:
-            analysis = analyze_logs(logs)
-            send_slack_message(f"🚨 CI Failed in {repo}\n\n{analysis}")
+           log_snippet = analyze_logs(logs)
+           analysis = analyze_with_llm(log_snippet)
+           send_slack_message(f"🚨 CI Failed in {repo}\n\n{analysis}")
         else:
             send_slack_message(f"🚨 CI Failed in {repo}\n\nCould not fetch logs.")
 
@@ -77,22 +78,53 @@ def fetch_workflow_logs(owner, repo, run_id):
 
 
 def analyze_logs(log_text):
-    # Simple failure detection instead of LLM
     lines = log_text.splitlines()
 
-    error_lines = []
+    error_blocks = []
+    for i, line in enumerate(lines):
+        if "##[error]" in line or "error" in line.lower():
+            # capture 5 lines before and after error
+            start = max(i - 5, 0)
+            end = min(i + 5, len(lines))
+            block = "\n".join(lines[start:end])
+            error_blocks.append(block)
 
-    for line in lines:
-        if "error" in line.lower() or "failed" in line.lower():
-            error_lines.append(line)
+    if not error_blocks:
+        return "CI failed but no clear error block found."
 
-    if not error_lines:
-        return "CI failed but no obvious error message found."
+    return "Potential root cause section:\n\n" + error_blocks[0]
 
-    summary = "\n".join(error_lines[:5])  # show first 5 errors
-    return f"Detected error lines:\n\n{summary}"
-    
+def analyze_with_llm(log_snippet):
+    url = "https://openrouter.ai/api/v1/chat/completions"
 
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "model": "meta-llama/llama-3-8b-instruct:free",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a DevOps expert. Identify the root cause of CI failure and suggest a clear fix."
+            },
+            {
+                "role": "user",
+                "content": f"Analyze this CI log snippet and provide:\n1. Root Cause\n2. Suggested Fix\n\nLogs:\n{log_snippet}"
+            }
+        ],
+        "max_tokens": 400,
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code != 200:
+        print("OpenRouter error:", response.text)
+        return "Could not analyze with AI."
+
+    result = response.json()
+    return result["choices"][0]["message"]["content"]
 
 def send_slack_message(message):
     data = {"text": message}
