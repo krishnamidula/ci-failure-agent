@@ -100,6 +100,8 @@ def analyze_with_llm(log_snippet):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ci-failure-agent-ayas.onrender.com",
+        "X-Title": "CI Failure Agent"
     }
 
     data = {
@@ -117,14 +119,21 @@ def analyze_with_llm(log_snippet):
         "max_tokens": 400,
     }
 
-    response = requests.post(url, headers=headers, json=data)
+    try:
+        response = requests.post(url, headers=headers, json=data)
 
-    if response.status_code != 200:
-        print("OpenRouter error:", response.text)
-        return "Could not analyze with AI."
+        print("OpenRouter status:", response.status_code)
 
-    result = response.json()
-    return result["choices"][0]["message"]["content"]
+        if response.status_code != 200:
+            print("OpenRouter error:", response.text)
+            return "AI analysis failed."
+
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print("LLM Exception:", str(e))
+        return "AI analysis crashed."
 
 def send_slack_message(message):
     data = {"text": message}
