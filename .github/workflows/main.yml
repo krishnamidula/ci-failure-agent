@@ -9,6 +9,3 @@ jobs:
     steps:
       - name: Fail intentionally
         run: exit 1
-
-        
- 
