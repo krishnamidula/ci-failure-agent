@@ -21,6 +21,7 @@ async def root():
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    print("🔥 VERSION 3 - LLM ACTIVE 🔥")
     payload = await request.json()
 
     print("Received webhook")
