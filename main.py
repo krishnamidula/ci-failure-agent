@@ -96,17 +96,15 @@ def analyze_logs(log_text):
     return "Potential root cause section:\n\n" + error_blocks[0]
 
 def analyze_with_llm(log_snippet):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    url = "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://ci-failure-agent-ayas.onrender.com",
-        "X-Title": "CI Failure Agent"
     }
 
     data = {
-        "model": "microsoft/phi-3-mini-128k-instruct:free",
+        "model": "llama3-8b-8192",
         "messages": [
             {
                 "role": "system",
@@ -117,25 +115,25 @@ def analyze_with_llm(log_snippet):
                 "content": f"Analyze this CI log snippet and provide:\n1. Root Cause\n2. Suggested Fix\n\nLogs:\n{log_snippet}"
             }
         ],
+        "temperature": 0.2,
         "max_tokens": 400,
     }
 
     try:
         response = requests.post(url, headers=headers, json=data)
 
-        print("OpenRouter status:", response.status_code)
+        print("Groq status:", response.status_code)
 
         if response.status_code != 200:
-            print("OpenRouter error:", response.text)
+            print("Groq error:", response.text)
             return "AI analysis failed."
 
         result = response.json()
         return result["choices"][0]["message"]["content"]
 
     except Exception as e:
-        print("LLM Exception:", str(e))
+        print("Groq Exception:", str(e))
         return "AI analysis crashed."
-
 def send_slack_message(message):
     data = {"text": message}
 
