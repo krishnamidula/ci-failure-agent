@@ -120,7 +120,7 @@ def analyze_with_llm(log_snippet):
     }
 
     data = {
-        "model": "gpt-oss-120b",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {
                 "role": "system",
