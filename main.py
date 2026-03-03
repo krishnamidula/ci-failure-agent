@@ -72,7 +72,7 @@ def fetch_workflow_logs(owner, repo, run_id):
                 with z.open(file_name) as f:
                     combined_logs += f.read().decode("utf-8", errors="ignore")
             print("Logs extracted successfully")
-            return combined_logs[:8000]  # limit size
+            return combined_logs[:-6000]  # limit size
     except Exception as e:
         print("Error extracting logs:", e)
         return None
