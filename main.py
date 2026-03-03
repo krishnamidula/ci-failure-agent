@@ -111,7 +111,7 @@ def analyze_with_llm(log_snippet):
     }
 
     data = {
-        "model": "llama-3.1-8b-instant",
+        "model": "gpt-oss-120b"
         "messages": [
             {
                 "role": "system",
@@ -119,7 +119,7 @@ def analyze_with_llm(log_snippet):
             },
             {
                 "role": "user",
-                "content": f"Analyze this CI log snippet and provide:\n1. Root Cause\n2. Suggested Fix\n\nLogs:\n{log_snippet}"
+                "content": "You are a senior CI/CD debugging expert. Only analyze the given log snippet. Do not provide generic advice. Identify the exact failing line and explain the technical cause."
             }
         ],
         "temperature": 0.2,
