@@ -81,26 +81,27 @@ def fetch_workflow_logs(owner, repo, run_id):
 def analyze_logs(log_text):
     lines = log_text.splitlines()
 
-    error_keywords = [
+    # Reverse search for real failure indicators
+    failure_indicators = [
         "Traceback",
         "AssertionError",
         "ModuleNotFoundError",
         "SyntaxError",
         "FAILED",
-        "Error:",
+        "ERROR",
         "Exception"
     ]
 
-    for i, line in enumerate(lines):
-        for keyword in error_keywords:
-            if keyword in line:
-                start = max(i - 10, 0)
-                end = min(i + 20, len(lines))
+    # Search from bottom (most recent lines first)
+    for i in range(len(lines) - 1, -1, -1):
+        for keyword in failure_indicators:
+            if keyword in lines[i]:
+                start = max(i - 15, 0)
+                end = min(i + 25, len(lines))
                 return "\n".join(lines[start:end])
 
-    # fallback: return last 200 lines
-    return "\n".join(lines[-200:])
-
+    # If nothing found, return last 300 lines
+    return "\n".join(lines[-300:])
 def analyze_with_llm(log_snippet):
     url = "https://api.groq.com/openai/v1/chat/completions"
 
