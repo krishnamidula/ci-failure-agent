@@ -106,7 +106,7 @@ def analyze_with_llm(log_snippet):
     }
 
     data = {
-        "model": "meta-llama/llama-3-8b-instruct:free",
+        "model": "microsoft/phi-3-mini-128k-instruct:free",
         "messages": [
             {
                 "role": "system",
