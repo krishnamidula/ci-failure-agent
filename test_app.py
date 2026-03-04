@@ -13,3 +13,4 @@ def square_root(x):
 def load_data():
     df = pandas.read_csv("data.csv")  # file does not exist
     return df
+ 
