@@ -13,24 +13,26 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
+MODEL_NAME = "llama-3.3-70b-versatile"
+
 
 @app.get("/")
 async def root():
-    return {"message": "Server running"}
+    return {"message": "CI Failure Agent running"}
 
 
 @app.post("/webhook")
 async def webhook(request: Request):
-    print("🔥 VERSION 3 - LLM ACTIVE 🔥")
+    print("🔥 CI FAILURE AGENT ACTIVE")
 
     payload = await request.json()
-    print("Received webhook")
+    print("Webhook received")
 
     if (
         payload.get("action") == "completed"
         and payload.get("workflow_run", {}).get("conclusion") == "failure"
     ):
-        print("CI FAILURE DETECTED")
+        print("🚨 CI FAILURE DETECTED")
 
         workflow_run = payload["workflow_run"]
         repo = payload["repository"]["name"]
@@ -47,14 +49,24 @@ async def webhook(request: Request):
             print("=================================")
 
             analysis = analyze_with_llm(log_snippet)
-            send_slack_message(f"🚨 CI Failed in {repo}\n\n{analysis}")
+
+            send_slack_message(
+                f"🚨 *CI Failure Detected*\n\n"
+                f"*Repository:* {repo}\n"
+                f"*Run ID:* {run_id}\n\n"
+                f"{analysis}"
+            )
+
         else:
-            send_slack_message(f"🚨 CI Failed in {repo}\n\nCould not fetch logs.")
+            send_slack_message(
+                f"🚨 CI Failed in {repo}\n\nUnable to fetch logs."
+            )
 
     return {"status": "received"}
 
 
 def fetch_workflow_logs(owner, repo, run_id):
+
     url = f"https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/logs"
 
     headers = {
@@ -70,15 +82,16 @@ def fetch_workflow_logs(owner, repo, run_id):
 
     try:
         zip_bytes = io.BytesIO(response.content)
+
         with zipfile.ZipFile(zip_bytes) as z:
             combined_logs = ""
+
             for file_name in z.namelist():
                 with z.open(file_name) as f:
                     combined_logs += f.read().decode("utf-8", errors="ignore")
 
         print("Logs extracted successfully")
 
-        # Return last part of logs (most relevant for failure)
         return combined_logs[-8000:]
 
     except Exception as e:
@@ -87,6 +100,7 @@ def fetch_workflow_logs(owner, repo, run_id):
 
 
 def analyze_logs(log_text):
+
     lines = log_text.splitlines()
 
     failure_indicators = [
@@ -99,19 +113,22 @@ def analyze_logs(log_text):
         "Exception"
     ]
 
-    # Search from bottom
     for i in range(len(lines) - 1, -1, -1):
+
         for keyword in failure_indicators:
+
             if keyword in lines[i]:
+
                 start = max(i - 15, 0)
                 end = min(i + 25, len(lines))
+
                 return "\n".join(lines[start:end])
 
-    # fallback
     return "\n".join(lines[-300:])
 
 
 def analyze_with_llm(log_snippet):
+
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
@@ -119,34 +136,49 @@ def analyze_with_llm(log_snippet):
         "Content-Type": "application/json",
     }
 
-    data = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a senior CI/CD debugging expert. Only analyze the provided log snippet. Do not give generic advice."
-            },
-            {
-                "role": "user",
-                "content": f"""
-Analyze this CI failure log and return:
+    prompt = f"""
+You are a senior CI/CD debugging expert.
+
+Analyze the CI log snippet below.
+
+Your task:
+1. Identify the EXACT failure line.
+2. Explain the technical root cause.
+3. Provide a precise fix.
+
+Respond ONLY in this format:
 
 Root Cause:
-<exact technical cause>
+<short technical explanation>
+
+Failing Line:
+<exact failing line>
 
 Fix:
-<exact fix needed>
+<clear solution>
 
 Log:
 {log_snippet}
 """
+
+    data = {
+        "model": MODEL_NAME,
+        "messages": [
+            {
+                "role": "system",
+                "content": "Expert CI/CD debugging assistant."
+            },
+            {
+                "role": "user",
+                "content": prompt
             }
         ],
         "temperature": 0.2,
-        "max_tokens": 400,
+        "max_tokens": 500,
     }
 
     try:
+
         response = requests.post(url, headers=headers, json=data)
 
         print("Groq status:", response.status_code)
@@ -156,6 +188,7 @@ Log:
             return "AI analysis failed."
 
         result = response.json()
+
         return result["choices"][0]["message"]["content"]
 
     except Exception as e:
@@ -164,6 +197,7 @@ Log:
 
 
 def send_slack_message(message):
+
     data = {"text": message}
 
     response = requests.post(SLACK_WEBHOOK_URL, json=data)
